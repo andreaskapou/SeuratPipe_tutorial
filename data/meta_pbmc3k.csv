@@ -1,0 +1,2 @@
+﻿sample,donor,path,condition,pass_qc,technology
+pbmc1,pbmc1,pbmc3k,Healthy,TRUE,whole-cell
