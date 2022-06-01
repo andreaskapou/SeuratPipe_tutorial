@@ -1,5 +1,5 @@
 ---
-title: SeuratPipe scRNA-seq analysis
+title: SeuratPipe for scRNA-seq analysis
 author:
 - name: Andreas C. Kapourani
   affiliation: 
