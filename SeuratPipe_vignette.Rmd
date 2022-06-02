@@ -54,7 +54,7 @@ The aim of the `SeuratPipe` package is to streamline and provide a __reproducibl
 
 The package is publicly available on Github [https://github.com/andreaskapou/SeuratPipe](https://github.com/andreaskapou/SeuratPipe).
 
-In this vignette we will show how to perform different Seurat analyses using `SeuratPipe`. To run the contents of this vignette you should download the data from this __Github repository__ [https://github.com/andreaskapou/SeuratPipe_tutorial](https://github.com/andreaskapou/SeuratPipe_tutorial)
+In this vignette we will show how to perform different Seurat analyses using `SeuratPipe`. To run the contents of this vignette you should download the data from this __Github repository__ [https://github.com/andreaskapou/SeuratPipe_tutorial](https://github.com/andreaskapou/SeuratPipe_tutorial) in the `data` folder.
 
 # SeuratPipe installation
 ```{r, echo=TRUE, include=TRUE, eval=FALSE}
@@ -76,7 +76,7 @@ SeuratPipe::install_scrublet()
 # type ?install_scrublet for more details
 ```
 
-If this fails, you need to follow details in `reticulate` package on how to install any Python package on your machine.
+If this fails, you need to follow details in `reticulate` package on how to install any Python package on your machine. If you have any issues with installation, you can still use the SeuratPipe package, although you have to set `use_scrublet = FALSE`, i.e. do not perform any doublet detection in your analysis.
 
 # Datasets
 Initially, using the __PBMC3K__ dataset, we will show how to read 10x output files and create Seurat objects, perform QC filtering and subsequent processing and clustering steps. 
@@ -85,8 +85,8 @@ Next, we will use the __IFNB__ dataset, which contains two samples (control and 
 
 First we load required packages
 ```{r, include=TRUE, echo=TRUE}
-library(SeuratPipe)
 library(Seurat)
+library(SeuratPipe)
 ```
 
 # Running QC pipeline
@@ -104,7 +104,7 @@ Settings for QC
 io <- list()
 io$data_dir <- "data/"
 io$out_dir <- "pbmc_results/qc/"
-io$tenx_dir <- "/outs/" # Assume whole-cell
+io$tenx_dir <- "/outs/" # Assume whole-cell RNA-seq
 io$meta_file <- paste0(io$data_dir, "/meta_pbmc3k.csv")
 
 # Opts
@@ -112,14 +112,16 @@ opts <- list()
 opts$nfeat_thresh <- 200
 opts$mito_thresh <- 5
 opts$meta_colnames <- c("donor", "condition", "pass_qc")
-opts$qc_to_plot <- c("nFeature_RNA", "nCount_RNA", "percent.mito")
+opts$qc_to_plot <- c("nFeature_RNA", "percent.mito")
 ```
 
 We can perform all QC pipeline steps using a single wrapper function `run_qc_pipeline` as shown below. This function will also generate all the QC plots. 
 
-__NOTE__: The wrapper will also store an `.rds` file, named (`seu_qc.rds`) which contains the Seurat object and the `opts` we defined for our analysis. This is done for reproducibility purposes (see Cluster analysis section how to read this file).
+__NOTE__: The wrapper will also store an `.rds` file, named (`seu_qc.rds`) which contains the Seurat object and the `opts` we defined for our analysis. This is done for reproducibility purposes (see `Cluster analysis` section how to read this file).
 
 ```{r, echo=TRUE, include=TRUE}
+# Run pipeline, note you can define additional parameters
+# type ?run_qc_pipeline for help.
 seu <- run_qc_pipeline(
   data_dir = io$data_dir, 
   sample_meta = NULL, 
@@ -130,51 +132,48 @@ seu <- run_qc_pipeline(
   out_dir = io$out_dir,
   qc_to_plot = opts$qc_to_plot,
   use_scrublet = FALSE, 
-  use_soupx = FALSE,
+  use_soupx = FALSE, 
   tenx_dir = io$tenx_dir)
 ```
 
+A template for running QC pipeline using `SeuratPipe` can be found here: [https://github.com/andreaskapou/SeuratPipe_tutorial/blob/main/template_qc_pipeline.R](https://github.com/andreaskapou/SeuratPipe_tutorial/blob/main/template_qc_pipeline.R) 
+
 ## Advanced
-If you want more control over qc analysis, the above function wraps the following functions and generates plots.
+If you want more control over QC analysis, the above function wraps the following commands and generates plots. 
 ```{r, eval=FALSE, echo=TRUE, include=TRUE}
 # First create Seurat
-seu <- create_seurat_object(data_dir, sample_meta, ...)
+seu <- create_seurat_object(...)
 # Then perform filtering
-seu <- filter_seurat_object(seu, ...)
+seu <- filter_seurat_object(...)
 ```
 
 
 # Running cluster pipeline
-It is __advised__ to have different files for different analysis tasks, here QC and clustering. Because, most likely you will perform QC once (or two), but clustering (and other downstream tasks) will be performed multiple times. This is the reason we store the QCed Seurat object so we can read it directly from the disk. 
+It is __advised__ to have different files for different analysis tasks, here QC and clustering. Because, most likely you will perform QC once (or two), but clustering (and other downstream tasks) multiple times. This is the reason we store the QCed Seurat object so we can read it directly from the disk. 
 
-That is why here I am defining again the settings for the clustering pipeline
 ```{r, include=TRUE, echo=TRUE}
-# I/O
+# Define again I/O and opts settings
 io <- list()
 io$base_dir <- "pbmc_results/"
 io$out_dir <- paste0(io$base_dir, "/cluster/")
-
 # Read Seurat object stored after QC
 seu_obj <- readRDS(file = paste0(io$base_dir, "/qc/seu_qc.rds"))
 seu <- seu_obj$seu   # Extract Seurat object
-opts <- seu_obj$opts # Extract opts from QC (helpful for reproducibility)
+opts <- seu_obj$opts # Extract opts from QC (for reproducibility)
 
-##
 # Clustering opts
-##
+
 # Number of PCs, can be a vector: c(30, 50)
-opts$npcs <- c(50)
-# Top PCs to perform UMAP and clustering, can be a vector: c(30, 40)
-opts$ndims <- c(40)
+opts$npcs <- c(30)
+# PCs to perform UMAP and clustering, e.g c(30, 40)
+opts$ndims <- c(25)
 # Clustering resolutions
 opts$res <- seq(from = 0.2, to = 0.2, by = 0.1)
 # QC information to plot
 opts$qc_to_plot <- c("nFeature_RNA", "percent.mito")
 # Metadata columns to plot
 opts$meta_to_plot <- c("condition", "sample")
-# Maximum cutoff values for plotting continuous features, e.g. gene expression
-# Gives better plots where colour scale is not driven by a (few) outlier cells.
-# Set to NULL to recoved default Seurat plots
+# Maximum cutoff values for plotting continuous features
 opts$max.cutoff <- "q98"
 ```
 
@@ -204,8 +203,7 @@ The wrapper function performs the following steps:
 __NOTE__: If multiple `npcs` and `ndims` are given as input, the updated Seurat object with the last setting will be returned. 
 ```{r, echo=TRUE, include=TRUE, message=FALSE, warning=FALSE}
 # Run pipeline, note you can define additional parameters
-# (e.g. top N genes to plot per cluster), which are left 
-# to default values. type ?run_cluster_pipeline for help.
+# type ?run_cluster_pipeline for help.
 seu <- run_cluster_pipeline(
   seu_obj = seu, 
   out_dir = io$out_dir, 
@@ -219,82 +217,80 @@ seu <- run_cluster_pipeline(
   pcs_to_remove = NULL, seed = 1)
 ```
 
+A template for running clustering pipeline using `SeuratPipe` can be found here: [https://github.com/andreaskapou/SeuratPipe_tutorial/blob/main/template_cluster_pipeline.R](https://github.com/andreaskapou/SeuratPipe_tutorial/blob/main/template_cluster_pipeline.R) 
 
 ## Advanced
 If you want more control over the clustering pipeline, the above function wraps the following functions. The code below works for a single choice of `npcs` and `ndims` whereas the wrapper function allows multiple values to be passed as a vector.
 ```{r, eval=FALSE, echo=TRUE, include=TRUE}
 # Process and PCA
-seu <- lognormalize_and_pca(seu, npcs = 50, ...)
+seu <- lognormalize_and_pca(...)
 # UMAP
-seu <- run_umap(seu, dims = 1:opts$npcs, reduction="pca", ...)
+seu <- run_umap(...)
 # QC plots on dimensional reduced space
-dimred_qc_plots(seu, reductions = c("umap", "pca"), ...)
+dimred_qc_plots(...)
 # Module score analysis
-seu <- module_score_analysis(seu, modules_group, ...)
+seu <- module_score_analysis(...)
 # Clustering
-seu <- cluster_analysis(seu, dims = 1:30, res = opts$res, ...)
+seu <- cluster_analysis(...)
 ```
 
 Users can have even more control over `cluster_analysis`, and the main functions to perform clustering are the following:
-
 ```{r, eval=FALSE, echo=TRUE, include=TRUE}
 # Find neighbors
-seu <- find_neighbors(seu, dims = 1:opts$npcs, reduction = "pca", ...)
+seu <- find_neighbors(...)
 # Clustering with specific resolution
-seu <- find_clusters(seu, resolution = 0.3, ...)
+seu <- find_clusters(...)
 # Identify marker genes
-markers <- find_all_markers(seu, logfc.threshold = 0.5, 
-                            min.pct = 0.25, only.pos = TRUE)
+markers <- find_all_markers(...)
 ```
 
-Note that the __naming convention__ is to use exactly the same function names as Seurat package, but using underscores instead of CamelCase, which is the default in Seurat. The same holds for the plotting functions (see examples in next section).
+Note that the __naming convention__ is to use exactly the same function names as Seurat package, but using underscores instead of __CamelCase__, which is the default in Seurat. The same holds for the plotting functions (see examples in next section).
 
-In case we had a `list` of Seurat objects and wanted to perform clustering analysis for each sample independently, the code would look like this:
+In case we had a `list` of Seurat objects and wanted to perform clustering analysis for each sample independently, the code would look something like this:
 ```{r, eval=FALSE, echo=TRUE, include=TRUE}
 for (s in names(seu)) {
   sample_dir <- paste0(io$out_dir, "/", s, "/")
-  seu[[s]] <- run_cluster_pipeline(seu_obj = seu[[s]], 
-                                   out_dir = sample_dir, ...)
+  seu[[s]] <- run_cluster_pipeline(...)
 }
 ```
 
 ## Plotting / Visualisation
-`SeuratPipe` also provides tailored functions to generate high quality plots, by extending Seurat's built in plotting functions.
+`SeuratPipe` also provides tailored functions to generate high quality plots, by adapting Seurat's built in plotting functions.
 
-```{r, echo=TRUE, include=TRUE, fig.width=6, fig.height=5.5}
+```{r sp-cl-fig1, echo=TRUE, include=TRUE, fig.width=5, fig.height=4}
 # UMAP plot
-dim_plot(seu, reduction = "umap", group.by = "seurat_clusters")
+dim_plot(seu, reduction = "umap", group.by = "seurat_clusters", pt.size = 2)
 ```
 
-```{r, echo=TRUE, include=TRUE, fig.width=6, fig.height=5.5}
+```{r sp-cl-fig2, echo=TRUE, include=TRUE, fig.width=5, fig.height=4}
 # UMAP plot using SeuratPipe colour palette
 dim_plot(seu, reduction = "umap", group.by = "seurat_clusters", 
-         col_pal = SeuratPipe:::discrete_col_pal)
+         col_pal = SeuratPipe:::discrete_col_pal, pt.size = 2)
 ```
 
-```{r, echo=TRUE, include=TRUE, fig.width=8.5, fig.height=4.5, message=FALSE, warning=FALSE}
+```{r sp-cl-fig3, echo=TRUE, include=TRUE, fig.width=8.5, fig.height=4.5, message=FALSE, warning=FALSE}
 # Plotting specific genes
 feature_plot(seu, features = c("LYZ", "NKG7"), 
              ncol = 2, legend.position = "top")
 ```
 
-```{r, echo=TRUE, include=TRUE, fig.width=14, fig.height=4.5, message=FALSE, warning=FALSE}
+```{r sp-cl-fig4, echo=TRUE, include=TRUE, fig.width=14, fig.height=4.5, message=FALSE, warning=FALSE}
 # Plotting lineage module scores as feature plot
 feature_plot(seu, features = names(lineage), ncol = 3) & NoAxes()
 ```
 
-```{r, echo=TRUE, include=TRUE, fig.width=8, fig.height=4, message=FALSE, warning=FALSE}
+```{r sp-cl-fig5, echo=TRUE, include=TRUE, fig.width=8, fig.height=4, message=FALSE, warning=FALSE}
 # Plotting lineage module scores as dot plot
 dot_plot(seu, features = names(lineage))
 ```
 
 We can also check if specific technical factors are correlated with specific principal components.
-```{r, echo=TRUE, include=TRUE, fig.width=8, fig.height=3, message=FALSE, warning=FALSE}
+```{r sp-cl-fig7, echo=TRUE, include=TRUE, fig.width=8, fig.height=3, message=FALSE, warning=FALSE}
 pca_feature_cor_plot(seu, features = c("nFeature_RNA", "percent.mito"))
 ```
 
 The above plot can also be useful to understand which specific principal components explain/capture information about different cell types/lineages.
-```{r, echo=TRUE, include=TRUE, fig.width=8, fig.height=3, message=FALSE, warning=FALSE}
+```{r sp-cl-fig8, echo=TRUE, include=TRUE, fig.width=8, fig.height=3, message=FALSE, warning=FALSE}
 # Correlation of lineage scores with PCs
 pca_feature_cor_plot(seu, features = names(lineage))
 ```
@@ -318,28 +314,23 @@ for (s in names(seu)) {
 saveRDS(object = list(seu = seu, opts = list()), file = "data/ifnb.rds")
 ```
 
-Reading Seurat object and defining settings for Harmony pipeline. Note that parameters are almost identical to `run_cluster_pipeline`, with minor differences, such as the `run_harmony_pipeline` can accept a list of Seurat objects (i.e. multiple samples), and internally processed and merges the data. If you already have merged and processed your data, the pipeline accepts a single Seurat object and will skip the merging step.
+## Reading Seurat object and defining settings for Harmony pipeline. 
+Note that parameters are almost identical to `run_cluster_pipeline`, with minor differences, such as the `run_harmony_pipeline` can accept a list of Seurat objects (i.e. multiple samples), and internally processes and merges the data. If you already have merged and processed your data, the pipeline accepts a single Seurat object and will skip the merging step.
 ```{r, include=TRUE, echo=TRUE}
 # I/O
 io <- list()
 io$base_dir <- "ifnb_results/"
 io$out_dir <- paste0(io$base_dir, "/integrate/")
-
 # Read QCed Seurat object
 seu_obj <- readRDS(file = paste0(io$base_dir, "/qc/seu_qc.rds"))
 seu <- seu_obj$seu   # Extract (list of) Seurat objects
 opts <- seu_obj$opts # Extract opts from QC (here empty list)
 
-# Remove object and return memory to the system
-rm(seu_obj)
-gc(verbose = FALSE)
-
-##
 # Clustering opts
-##
-# Number of PCs, can be a vector: c(30, 50)
+
+# Number of PCs
 opts$npcs <- c(50)
-# Top Harmony dims for UMAP and clustering, can be a vector: c(30, 40)
+# Harmony dims for UMAP and clustering
 opts$ndims <- c(40)
 # Clustering resolutions
 opts$res <- seq(0.1, 0.1, by = 0.1)
@@ -351,63 +342,53 @@ opts$qc_to_plot <- c("nFeature_RNA", "percent.mito")
 opts$meta_to_plot <- c("condition")
 # Maximum number of Harmony iterations
 opts$max.iter.harmony <- 50
-# If intermediate object 'seu_harmony_<>.rds' exists (e.g. from 
-# earlier analysis) and force_reanalysis = FALSE, read object instead 
-# of re-running Harmony integration. Added for computing time efficiency.
-opts$force_reanalysis <- TRUE
-# Maximum cutoff values for plotting continuous features, e.g. gene expression
-# Gives better plots where colour scale is not driven by a (few) outlier cells.
-# Set to NULL to recoved default Seurat plots
-opts$max.cutoff <- "q98"
 ```
 
 Next we are ready to perform the full Harmony integration pipeline and obtain our final clusters. 
 ```{r, echo=TRUE, include=TRUE}
 # Run pipeline, note you can define additional parameters
-# (e.g. top N genes to plot per cluster), which are left 
-# to default values. type ?run_harmony_pipeline for help.
+# type ?run_harmony_pipeline for help.
 seu <- run_harmony_pipeline(
   seu_obj = seu, 
   batch_id = opts$batch_id,
   out_dir = io$out_dir, 
   npcs = opts$npcs,
   ndims = opts$ndims, 
-  res = opts$res,
-  modules_group = NULL,
+  res = opts$res, modules_group = NULL, 
   metadata_to_plot = opts$meta_to_plot,
-  qc_to_plot = opts$qc_to_plot, 
-  max.cutoff = opts$max.cutoff,
-  force_reanalysis = opts$force_reanalysis,
   max.iter.harmony = opts$max.iter.harmony,
-  pcs_to_remove = NULL, seed = 1)
+  qc_to_plot = opts$qc_to_plot, 
+  plot_cluster_markers = FALSE, seed = 1)
 ```
+
+A template for running Harmony integration pipeline using `SeuratPipe` can be found here: [https://github.com/andreaskapou/SeuratPipe_tutorial/blob/main/template_harmony_pipeline.R](https://github.com/andreaskapou/SeuratPipe_tutorial/blob/main/template_harmony_pipeline.R) 
 
 ## Advanced
 If you want more control over the Harmony integration pipeline, the above function wraps the following functions. The code below works for a single choice of `npcs` and `ndims` whereas the wrapper function allows multiple values to be passed as a vector.
 ```{r, eval=FALSE, echo=TRUE, include=TRUE}
 # Harmony analysis
-seu <- harmony_analysis(seu, npcs = 50, ...)
+seu <- harmony_analysis(...)
 # UMAP
-seu <- run_umap(seu, dims = 1:opts$npcs, reduction="pca", ...)
+seu <- run_umap(...)
 # QC plots on dimensional reduced space
-dimred_qc_plots(seu, reductions = c("umap", "pca"), ...)
+dimred_qc_plots(...)
 # Module score analysis
-seu <- module_score_analysis(seu, modules_group, ...)
+seu <- module_score_analysis(...)
 # Clustering
-seu <- cluster_analysis(seu, dims = 1:30, res = opts$res, ...)
+seu <- cluster_analysis(...)
 ```
 
 ## Visualistion
-```{r, echo=TRUE, include=TRUE, fig.width=6, fig.height=5.5}
-dim_plot(seu, group.by = "seurat_clusters",
-         col_pal = SeuratPipe:::discrete_col_pal)
+```{r sp-har-fig1, echo=TRUE, include=TRUE, fig.width=5, fig.height=4}
+dim_plot(seu, group.by = "seurat_clusters", pt.size = 2,
+         col_pal = SeuratPipe:::discrete_col_pal) & NoAxes()
 ```
 
-```{r, echo=TRUE, include=TRUE, fig.width=12, fig.height=5.5}
+```{r sp-har-fig2, echo=TRUE, include=TRUE, fig.width=12, fig.height=5.5}
 dim_plot(seu, group.by = "condition", split.by = "condition", ncol = 2)
 ```
 
-```{r, echo=TRUE, include=TRUE, fig.width=10, fig.height=5.5, message=FALSE, warning=FALSE}
+```{r sp-har-fig3, echo=TRUE, include=TRUE, fig.width=10, fig.height=5.5, message=FALSE, warning=FALSE}
 # Plotting specific genes
 feature_plot(seu, features = c("LYZ", "NKG7"), 
              ncol = 2, legend.position = "top")
